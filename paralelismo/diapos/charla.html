@@ -82,96 +82,123 @@ toma otro recurso (por ejemplo, la pantalla), y ahora el primer thread pide la p
 red. Como ambos estan esperando al otro, nunca van a soltarlo en una liberacion normal.
 
 ---
-# C++11 Threads
+# C++11 Threads 101
+```c++
+#include <iostream>
+#include <thread>
 
-    #include <iostream>
-    #include <thread>
+void say_hello() {
+  std::cout << "Hola" << std::endl;
+}
 
-    void say_hello() {
-      std::cout << "Hola" << std::endl;
-    }
+void say_number(int id) {
+  std::cout << "Mi numero es " << id << std::endl;
+}
 
-    void say_number(int id) {
-      std::cout << "Mi numero es " << id << std::endl;
-    }
+int main() {
+  std::thread tl(say_hello);
+  tl.join();
 
-    int main() {
-      std::thread tl(say_hello);
-      tl.join();
+  std::thread tArray[10];
+  for(int i= 0; i<10; i++) {
+*    tArray[i] = std::thread(say_number, i);
+  }
 
-      std::thread tArray[10];
-      for(int i= 0; i<10; i++) {
-        tArray[i] = std::thread(say_number, i);
-      }
+  std::cout << "Soy main" <<std::endl;
 
-      std::cout << "Soy main" <<std::endl;
+  for(int i= 0; i<10; i++) {
+*    tArray[i].join();
+  }
+  return 0;
+ }
+```
+---
+#C++11 Threads usando archivos de inputs
+```c++
+#include <iostream>
+#include <thread>
 
-      for(int i= 0; i<10; i++) {
-        tArray[i].join();
-      }
-      return 0;
-     }
+void solve(std::string path, int& result);
+
+int main(int argc, char* argv[]) {
+  int n_files = argc-1;
+  std::vector<std::thread> tArray(n_files-1);
+  std::vector<int> solutions(n_files);
+
+  for(int i= 0; i<n_files-1; i++) {
+    tArray[i] = std::thread(solve, std::string(argv[i]), &solutions[i] );
+  }
+
+  solve(std::string(argv[n_files]), &solutions[n_files]);
+
+  for(auto &t : tArray) {
+    t.join();
+  }
+
+  for(int i= 0; i<n_files; i++) {
+    std::cout << "La solucion " << i << "esima es " << solutions[i] << std::endl;
+  }
+  return 0;
+}
+```
+---
+#Combinando con Lambdas y STL
+```c++
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <algorithm>
+
+int main() {
+  int elems = 100;
+  int computation = 0;
+  std::vector<int> q(elems, 1);
+  std::vector<std::thread> threads;
+
+  std::thread t1([&]() { for (auto & e : q) std::cout << e; } );
+  std::thread t2([&](int& res) {for (auto &e : q) res += e; },
+                 std::ref(computation));
+  threads.push_back(std::move(t1));
+  threads.push_back(std::move(t2));
+
+  std::for_each(threads.begin(), threads.end(), [](std::thread &t){ t.join(); });
+
+  std::cout << std::endl << computation << std::endl;
+  return 0;
+}
+```
 
 ---
-#C++11 Threads
+#Que da aca?
+```c++
+ void sumar(const std::vector<int>& s1,
+            const std::vector<int>& s2, int L, int R, int& res) {
+   for(int i=L; i<R; i++)
+      res += s1[i] * s2[i];
+ }
 
-    #include <iostream>
-    #include <thread>
+ int main() {
+   int sumita = 0;
+   int elems = 1000000;
+   int number_threads = 2;
+   std::vector<int> q(elems,1);
+   std::vector<int> w(elems,1);
+   std::vector<std::thread> threads;
 
-    void solve(std::string path, int& result);
-
-    int main(int argc, char* argv[]) {
-      int n_files = argc-1;
-      std::vector<std::thread> tArray(n_files-1);
-      std::vector<int> solutions(n_files);
-
-      for(int i= 0; i<n_files-1; i++) {
-        tArray[i] = std::thread(solve, std::string(argv[i]), &solutions[i] );
-      }
-
-      solve(std::string(argv[n_files]), &solutions[n_files]);
-
-      for( auto &t : tArray) {
-        t.join();
-      }
-
-      for(int i= 0; i<n_files; i++) {
-        std::cout << "La solucion " << i << "esima es " << solutions[i] << std::endl;
-      }
-      return 0;
-
-    }
-
-
----
-#Y aca?
-    void sumar(const std::vector<int>& s1,
-                const std::vector<int>& s2, int L, int R, int& res) {
-       for(int i=L; i<R; i++)
-          res += s1[i] * s2[i];
-    }
-
-     int main() {
-       int sumita = 0;
-       int elems = 1000000;
-       int number_threads = 2;
-       std::vector<int> q(elems,1);
-       std::vector<int> w(elems,1);
-       std::vector<std::thread> threads;
-
-       for(int i = 0; i< number_threads; i++) {
-         threads.push_back(
-           std::thread(sumar, q, w,
-                       i*(elems/number_threads),
-                       (i+1)*(elems/number_threads), std::ref(sumita)));
-       }
-       for(auto &v : threads) v.join();
-        std::cout << "La suma dio " << sumita << std::endl;
-    return 0;
-    }
-
+   for(int i = 0; i< number_threads; i++) {
+     threads.push_back(
+       std::thread(sumar, q, w,
+                   i*(elems/number_threads),
+                   (i+1)*(elems/number_threads), std::ref(sumita)));
+   }
+   for(auto &v : threads) v.join();
+   std::cout << "La suma dio " << sumita << std::endl;
+   return 0;
+}
+```
 ---
 # Race condition
+```bash
 
 manuel@daneel:/tmp $ g++ -o th -std=c++0x -pthread th.cpp
 manuel@daneel:/tmp $ ./th
@@ -189,7 +216,7 @@ La suma dio 1000000
 manuel@daneel:/tmp $ ./th
 
 La suma dio 998871
-
+```
 ---
 #Mutex y lock_guard
 
@@ -199,27 +226,61 @@ se ejecuta en un ciclo, y da exito o falla. Esto permite determinar una variable
 threads van a intentar tomar, y si lo logran, pueden proceder a hacer lo que tenian que hacer.
 Si no lo logran, van a seguir esperando hasta que este disponible.
 
-En C++11, las variables de tipo std::mutex son obtenidas por el constructor de objetos como
-std::lock_guard y std::unique_lock, y son liberados cuando estos son destruidos (RAII).
+En C++11, las variables de tipo `std::mutex` son obtenidas por el constructor de objetos como
+`std::lock_guard` y `std::unique_lock`, y son liberados cuando estos son destruidos (RAII).
 
 Esto garantiza que lo que sigue a std::lock_guard es posible solamente si pudo obtener el
 lock.
 
-std::unique_lock es similar, salvo que no los obtiene en su creacion sino explicitamente.
+`std::unique_lock` es similar, salvo que no los obtiene en su creacion sino explicitamente.
 Es util para cuando tenemos que adquirir mas de un recurso a la vez (sino podemos entrar
 en deadlock, como en el problema tipo de AB y BA)
 
 ---
-#std::mutex En el ejemplo anterior:
+#std::mutex en el ejemplo anterior
 
-    std::mutex safe;
+```c++
+#include <mutex>
 
-    void sumar(const std::vector<int>& s1,
-               const std::vector<int>& s2, int L, int R, int& res) {
-        std::lock_guard<std::mutex> lock(safe);
-        for(int i=L; i<R; i++)
-          res += s1[i] * s2[i];
-      }
+*std::mutex safe;
+
+void sumar(const std::vector<int>& s1,
+           const std::vector<int>& s2, int L, int R, int& res) {
+
+*           std::lock_guard<std::mutex> lock(safe);
+
+           for(int i=L; i<R; i++)
+             res += s1[i] * s2[i];
+}
+```
+---
+#Operaciones atomicas
+
+El mutex en el caso anterior sirve para realizar todas las operaciones de manera atomica, indivisible.
+La idea es que no nos puedan interrumpir durante un bloque critico de codigo.
+
+C++11 define una libreria `<atomic`> que nos brinda una forma para instanciar variables que sean atomicas, donde
+todas las operaciones que se realizen sobre ese dato se garantizan atomicas.
+
+`<atomic`> define `std::atomic<>`, ya especializado en los tipos de datos primitivos enteros:
+char, short, int, long, size_t y todos los de longitud fija (de `<cstdint`>)
+
+```c++
+#include <atomic>
+
+int main() {
+*  std::atomic<int> sumar(0);
+  for(int i = 0; i < 100 ; i++ ){
+    sumar += i;
+  }
+  std::cout << sumar << std::endl;
+}
+```
+---
+#Async y future
+
+Hasta ahora vimos que para devolver valores de un thread, teniamos que pasar una
+referencia a una variable o escribir en algun lugar comun. C++11
 ---
 
 #pthreads
@@ -235,16 +296,6 @@ El estandar define funciones en 4 categorias
 
 POSIX es la definicion de threads mas usada en la computacion. Los threads en C++ trabajan en una
 capa arriba de estos.
-
----
-#Estructuras
-
-
----
-#
-
----
-#
 
 ---
 #
