@@ -171,29 +171,29 @@ int main() {
 ---
 #Que da aca?
 ```c++
- void sumar(const std::vector<int>& s1,
-            const std::vector<int>& s2, int L, int R, int& res) {
-   for(int i=L; i<R; i++)
-      res += s1[i] * s2[i];
- }
+void sumar(const std::vector<int>& s1,
+           const std::vector<int>& s2, int L, int R, int& res) {
+  for(int i=L; i<R; i++)
+    res += s1[i] * s2[i];
+}
 
- int main() {
-   int sumita = 0;
-   int elems = 1000000;
-   int number_threads = 2;
-   std::vector<int> q(elems,1);
-   std::vector<int> w(elems,1);
-   std::vector<std::thread> threads;
+int main() {
+  int sumita = 0;
+  int elems = 1000000;
+  int number_threads = 2;
+  std::vector<int> q(elems,1);
+  std::vector<int> w(elems,1);
+  std::vector<std::thread> threads;
 
-   for(int i = 0; i< number_threads; i++) {
-     threads.push_back(
-       std::thread(sumar, q, w,
-                   i*(elems/number_threads),
-                   (i+1)*(elems/number_threads), std::ref(sumita)));
-   }
-   for(auto &v : threads) v.join();
-   std::cout << "La suma dio " << sumita << std::endl;
-   return 0;
+  for(int i = 0; i< number_threads; i++) {
+   threads.push_back(
+     std::thread(sumar, q, w,
+                 i*(elems/number_threads),
+                 (i+1)*(elems/number_threads), std::ref(sumita)));
+  }
+  for(auto &v : threads) v.join();
+  std::cout << "La suma dio " << sumita << std::endl;
+  return 0;
 }
 ```
 ---
@@ -280,7 +280,44 @@ int main() {
 #Async y future
 
 Hasta ahora vimos que para devolver valores de un thread, teniamos que pasar una
-referencia a una variable o escribir en algun lugar comun. C++11
+referencia a una variable o escribir en algun lugar comun. C++11 define el concepto
+de `future`.
+
+`std::async` lanza una funcion f y devuelve instantaneamente una promesa de resultado, un `std::future`.
+Esto permite seguir la ejecucion del programa y solamente esperar a ese valor cuando se lo necesite,
+permitiendo correr de manera paralela ambos.
+
+Se le pueden pasar parametros a `async`, para forzar de que ejecute la funcion `f` en otro thread,
+o que lo haga lazy, que solo la ejecute si alguien pide el future. Ideal para dejar preparadas funciones
+que tal vez no se ejecuten.
+
+---
+#Async y future
+
+```c++
+
+#include <algorithm>
+#include <numeric>
+#include <future>
+
+template <typename RAIter>
+int parallel_sum(RAIter beg, RAIter end) {
+    auto len = std::distance(beg, end);
+    if(len < 1000)
+        return std::accumulate(beg, end, 0);
+
+    RAIter mid = beg + len/2;
+*    auto handle = std::async(std::launch::async,
+*                              parallel_sum<RAIter>, mid, end);
+*    int sum = parallel_sum(beg, mid);
+*    return sum + handle.get();
+}
+
+int main() {
+    std::vector<int> v(10000, 1);
+    std::cout << "The sum is " << parallel_sum(v.begin(), v.end()) << '\n';
+}
+```
 ---
 
 #pthreads
