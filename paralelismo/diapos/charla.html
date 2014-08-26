@@ -48,8 +48,11 @@ interactuando entre ellos. Aca concurrentemente es en contraposicion a serialmen
 del otro. Esto no implica que suceden a la vez, sino que durante la vida de los procesos
 sus ejecuciones se pueden sobrelapar.
 
-Notar que no se puede tener computo en paralelo en un sistema de un unico procesador (single-core).
-Si se puede tener computo concurrente (como hacen los sistemas operativos).
+Dicho de otra manera, _paralelo_ describe cosas que pasan simultaneamente en el tiempo, _concurrente_
+es un estilo de diseño de software que se adapta a que las cosas pasen de manera paralela.
+
+Notar que *no* se puede tener computo en paralelo en un sistema de un unico procesador (single-core).
+*Si* se puede tener computo concurrente (como hacen los sistemas operativos).
 
 ---
 
@@ -319,8 +322,7 @@ int main() {
 }
 ```
 ---
-
-#pthreads
+#En el fondo, esto es `pthreads`
 
 El estandar POSIX define una API para crear y manipular threads en C. La implementan OS como
 FreeBSD, OpenBSD, Linux, OSX, y "Windows" (de manera no nativa).
@@ -335,10 +337,95 @@ POSIX es la definicion de threads mas usada en la computacion. Los threads en C+
 capa arriba de estos.
 
 ---
+#Paralelismo automatico: OpenMP
+
+Muchas veces tenemos que hacer aplicaciones donde debemos computar cosas grandes
+(procesos sobre imagenes, resolver cuentas matriciales, etc.)
+
+En los procesadores de multiples nucleos vamos a tener que usar tecnicas
+concurrentes para poder correr cosas en paralelo. C++11 nos provee muchas herramientas,
+con `std::thread` y `std::future`, pero tambien tenemos herramientas mas automaticas,
+ya implementadas en muchos compiladores modernos.
+
+Vamos a ver la mas comun y sencilla: *OpenMP*
+
+*OpenMP* es un estandar que define directivas al compilador para que el codigo generado arme threads
+y corra las iteraciones del ciclo que acelaramos en threads distintos.
+---
+#OpenMP 101
+
+```c++
+
+#include <iostream>
+#include <vector>
+
+int main() {
+  int elementos = 1000*1000;
+  int suma = 0;
+  std::vector<int> a(elementos, 1);
+  std::vector<int> b(elementos, 2);
+  std::vector<int> resultado(elementos, 0);
+
+*#pragma omp parallel for
+  for(int i=0; i<elementos; i++) {
+    resultado[i] = a[i]+b[i];
+  }
+
+*#pragma omp parallel for reduce(+:suma)
+  for(int i=0; i<elementos; i++) {
+    suma += resultado[i];
+  }
+  std::cout << suma << std::endl;
+  return 0;
+}
+
+```
+---
+#OpenMP 101
+
+El `#pragma omp parallel for` es la directiva clave. Aca decimos que el ciclo `for` siguiente
+puede ser paralelizado. A esta se le pueden agregar otras directivas que hablen de las
+variables ya definidas en el contexto:
+- `shared()` dice que esas variables son compartidas entre todos los threads, pero
+no tienen un mutex por defecto, eso nos corresponde a nosotros agregarlo.
+
+- `private()` dice que esas variables no son compartidas, por lo cual cada thread tiene su copia de esta.
+
+- `reduce()` dice que las variables que se usen para reducir, al final de todo el proceso, deben
+ser reducidas entre si de la forma definida. Otras reducciones son `*`, `&&`, `||`.
+
+OpenMP por default crea un *pool* de threads, tantos como procesadores virtuales tenga la
+maquina (incluyendo el hyperthreading, digamos). Esto se hace porque crear threads es
+costoso cuando su vida puede ser relativamente corta. Cuando termina una iteracion, se le
+carga a ese thread que termino la nueva iteracion a procesar.
+
+---
+#Ojo con OpenMP
+
+Cosas importantes que tenemos que tener en cuenta para usar la paralelizacion automatica:
+- Las iteraciones del ciclo deben ser independientes: no es util esta estrategia de paralelizacion
+si para hacer el paso i-esimo, necesitamos los datos i-1 esimo.
+
+- Las iteraciones deben tener una cantidad no-trivial de trabajo que hacer.
+
+- No debemos modificar la condicion de la iteracion durante la ejecucion.
+
+- Hay que agregar al `parallel for` directivas adicionales para especificar el comportamiento
+de las variables del contexto
+
+- Como vamos a tener muchos threads corriendo sobre un mismo codigo, mucho cuidado con las
+race conditions. `#pragma omp critical` define un bloque que solo puede tener un thread a la
+vez. Permite serializar las cuentas, pero disminuye el paralelismo.
+
+---
+#
+---
+#
+---
 #
 
     </textarea>
-    <script src="http://gnab.github.io/remark/downloads/remark-latest.min.js" type="text/javascript">
+    <script src="remark-latest.min.js" type="text/javascript">
     </script>
     <script type="text/javascript">
       var slideshow = remark.create();
