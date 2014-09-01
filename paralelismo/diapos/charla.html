@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Title</title>
+    <title>Threading y paralelismo</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <style type="text/css">
       @import url(http://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -68,6 +68,23 @@ En videojuegos, para manejar red, graficos e input simultaneamente.
 
 En las aplicaciones de computo cientifico, es la forma de tener todos los procesadores corriendo
 porciones de la cuenta.
+
+---
+#Ley de Amdhal
+
+Cuando uno usa paralelismo para aumentar la velocidad de lo que esta realizando, tiene que pensar
+cuanto es el maximo de velocidad que se puede ganar. La ley de Amdhal dice que si P es
+la proporcion de un programa que se beneficia de la paralelizacion, y (1-P) es la proporcion
+que debe ser serial necesariamente, entonces _speedup_ maximo lograble usando N procesadores es:
+
+Speedup(N) = 1 /((1-P) + (P / N))
+
+Esto pone la cota en que la parte serial va a terminar siempre dominando, sin importar que tengamos
+muchos procesadores.
+
+---
+#Ley de Amdhal
+![Amdhal](Amdhal.png)
 
 ---
 #Que problemas tienen los threads?
@@ -400,6 +417,39 @@ costoso cuando su vida puede ser relativamente corta. Cuando termina una iteraci
 carga a ese thread que termino la nueva iteracion a procesar.
 
 ---
+# Seccion Critica
+
+```c++
+#pragma omp parallel for
+  for(int i=0; i<elementos; i++) {
+    while(tmp > 0) {
+      printf("%d", tmp % 10);
+      tmp = tmp / 10;
+    }
+  }
+```
+Que pasa si dos threads entran en el `while` al mismo tiempo?
+--
+
+```c++
+#pragma omp parallel for
+  for(int i=0; i<elementos; i++) {
+    int tmp = a[i]+b[i];
+*    #pragma omp critical
+    {
+      while(tmp > 0) {
+        printf("%d", tmp % 10);
+        tmp = tmp / 10;
+      }
+    }
+  }
+
+```
+---
+# Barreras
+
+
+---
 #Ojo con OpenMP
 
 Cosas importantes que tenemos que tener en cuenta para usar la paralelizacion automatica:
@@ -413,14 +463,7 @@ si para hacer el paso i-esimo, necesitamos los datos i-1 esimo.
 - Hay que agregar al `parallel for` directivas adicionales para especificar el comportamiento
 de las variables del contexto
 
-- Como vamos a tener muchos threads corriendo sobre un mismo codigo, mucho cuidado con las
-race conditions. `#pragma omp critical` define un bloque que solo puede tener un thread a la
-vez. Permite serializar las cuentas, pero disminuye el paralelismo.
 
----
-#
----
-#
 ---
 #
 
