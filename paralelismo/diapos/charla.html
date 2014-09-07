@@ -55,6 +55,20 @@ Notar que *no* se puede tener computo en paralelo en un sistema de un unico proc
 *Si* se puede tener computo concurrente (como hacen los sistemas operativos).
 
 ---
+#Granularidad
+
+Una distincion que vamos a hacer aca con respecto al paralelismo es la granularidad
+
+- **Fine-grained paralellism** va a ser cuando nosotros manejemos manualmente los threads, creandolos
+y destruyendolos explicitamente. Es la forma de manejarse cuando hay muy pocos threads en el sistema
+que tienen tareas muy distintas (por ejemplo: UI, Disco y Red)
+
+- **Coarse-grained paralellism** va a ser la herramienta de preferencia para manejar una cantidad
+masiva de threads. Aplica mayormente cuando tenemos un problema muy grande y lo partimos en
+una cantidad de threads con reparticion equitativa de trabajo. Esto es fundamental a la hora
+de maximizar el aprovechamiento de procesador. Esta a un nivel de abstraccion mas
+alto que el otro.
+---
 
 #Donde podemos observar threads?
 
@@ -366,8 +380,9 @@ ya implementadas en muchos compiladores modernos.
 
 Vamos a ver la mas comun y sencilla: *OpenMP*
 
-*OpenMP* es un estandar que define directivas al compilador para que el codigo generado arme threads
-y corra las iteraciones del ciclo que acelaramos en threads distintos.
+*OpenMP* es un estandar que define directivas de paralelismo coarse-grained al compilador
+para que el codigo generado arme threads y corra las iteraciones del ciclo que acelaramos
+en threads distintos.
 ---
 #OpenMP 101
 
@@ -446,17 +461,101 @@ Que pasa si dos threads entran en el `while` al mismo tiempo?
 
 ```
 ---
-# Barreras
+# Atomicas
 
+Asi como C++11 provee `<atomic>` para poder tener concurrentemente actualizaciones
+sin necesidad de `mutex`, OpenMP provee `atomic` con el mismo fin. Util para cuando
+hay que hacer cuentas de reduccion pero no estrictamente reducir todos los valores.
+
+
+```c++
+unsigned int suma = 0;
+#pragma omp parallel for
+for (int i=0 ; i<10000; i++) {
+  unsigned int res = cuentaLarga(i);
+
+  if ( res > 10) {
+*   #pragma omp atomic
+    suma += res;
+  }
+}
+
+```
+No soporta todos los tipos de datos y por statement, no un bloque, a diferencia de
+`critical`. Esto permite que sea implementado a nivel hardware, con mucho menor
+overhead.
 
 ---
-#Ojo con OpenMP
+# Barreras
+
+Dentro de un problema, tal vez es necesario que todos los threads de ejecucion
+se sincronicen antes de seguir. Por ejemplo, primero calcular una particion del problema
+y despues resolverla. Para esto, OpenMP provee dos herramientas:
+
+- **Barrera implicita** es la terminacion de la region paralela. Usa el mismo concepto de C++
+de `{ }` como manejadores de scope.
+
+- **Barrera explicita** es usar comandos de OpenMP para sincronizar todos los threads
+a cierto punto antes de proseguir.
+
+---
+#Barrera implicita
+
+```c++
+#pragma omp parallel for
+for(int row = 0; row<100; row++) {
+  for(int i=0; i<20; i++) {
+    b[row][i] *= a[i];
+  }
+*}
+
+#pragma omp parallel for
+for(int row = 0; row<100; row++) {
+  for(int i=0; i<20; i++) {
+    maxs[row] = std::max(maxs[row],b[my_thread][i]);
+  }
+*}
+
+for(int i = 0; i<100; i++) {
+  minmax = std::min(maxs[i], minmax);
+}
+
+```
+---
+#Barrera explicita
+```c++
+#pragma omp parallel num_threads(100)
+{
+  int my_thread = omp_get_num_thread();
+
+  for(int i=0; i<20; i++) {
+    b[my_thread][i] *= a[i];
+  }
+
+*  #pragma omp barrier
+  for(int i=0; i<20; i++) {
+    maxs[my_thread] = std::max(maxs[my_thread],b[my_thread][i]);
+  }
+
+*  #pragma omp barrier
+
+  if(my_thread==0) {
+    for(int i = 0; i<100; i++) {
+      minmax = std::min(maxs[i], minmax);
+    }
+  }
+}
+```
+---
+#Detalles importantes de OpenMP
 
 Cosas importantes que tenemos que tener en cuenta para usar la paralelizacion automatica:
 - Las iteraciones del ciclo deben ser independientes: no es util esta estrategia de paralelizacion
 si para hacer el paso i-esimo, necesitamos los datos i-1 esimo.
 
-- Las iteraciones deben tener una cantidad no-trivial de trabajo que hacer.
+- Las iteraciones deben tener una cantidad no-trivial de trabajo que hacer. No suele convenir
+tradear vectorizacion por paralelismo, si cada elemento tarda relativamente poco en
+ejecutarse.
 
 - No debemos modificar la condicion de la iteracion durante la ejecucion.
 
